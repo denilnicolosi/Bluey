@@ -1,0 +1,49 @@
+# Bluey LangGraph - Core Requirements
+# Multi-agent AI system using LangGraph with SQLite
+
+# Core LangGraph dependencies
+langgraph>=1.0.6
+langgraph-api>=6.0.38
+langgraph-checkpoint-sqlite>=3.0.2
+langsmith>=6.0.3
+langchain>=1.0.7
+langchain-core>=1.0.5
+langchain-community>=0.3.0
+langchain-openai
+langchain-google-genai
+langchain-text-splitters>=0.3.9
+langchain-experimental>=0.4.1
+langchain-ollama
+openevals
+
+ollama
+
+# SQLite driver
+aiosqlite>=0.19.0
+
+# SQLAlchemy for database operations
+sqlalchemy>=2.0.0
+
+# Data processing and visualization
+pandas>=2.0.0
+openpyxl>=3.1.0
+
+
+# Pydantic for structured outputs
+pydantic>=2.0.0
+
+# Image processing for graph visualization
+Pillow>=10.0.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# Testing dependencies
+pytest>=7.4.0,<9
+pytest-timeout>=2.1.0
+pytest-mock>=3.12.0
+
+#google dependencies
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

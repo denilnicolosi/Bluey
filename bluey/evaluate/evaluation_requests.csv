@@ -1,0 +1,32 @@
+message,category
+"How is policy renewal managed through the customer portal?",procedure_search
+"How does the renewal procedure work for categories with insured members? Once changes are saved, is renewal automatic?",procedure_search
+"How do you perform the punctual exclusion of an insured member from a policy?",procedure_search
+"What are the steps to perform a mass inclusion of insured members?",procedure_search
+"How do you modify insured capital in a punctual way?",procedure_search
+"From which row can the Caponuclei sheet be filled in the Excel file for mass inclusion?",faq_search
+"Which fields are mandatory for including a family member?",faq_search
+"How can we check from the customer portal whether the company accepted a cancellation request due to incorrect entry?",faq_search
+"How many customers have an active policy?",simple_query
+"Show me the list of policies expiring this month",simple_query
+"What is the average amount of open claims?",simple_query
+"How many claims were opened in the last month?",simple_query
+"Show me open claims from the last month with amount greater than 5000 euros",complex_query
+"Which customers have more than one active policy?",complex_query
+"Find policies with annual premium greater than 1000 euros and show customer data",complex_query
+"Send an email to mario.rossi@example.com to confirm tomorrow's appointment at 10:00",email_composition
+"Write an email to customer@email.com to remind them about the expiring policy renewal",email_composition
+"Send a welcome email to new.customer@email.com",email_composition
+"Schedule a meeting for next Tuesday at 15:00 with subject 'Auto policy renewal'",appointment_management
+"Book an appointment for Friday at 11:00 to discuss a claim",appointment_management
+"Create a calendar event for next Monday at 9:30 with customer Mario Bianchi",appointment_management
+"Find the customer for policy POL-5182-xogh and then send a reminder email for renewal",multi_agent
+"Find claims for customer with email address cristina39@example.net and schedule an appointment to discuss them",multi_agent
+"Find the renewal procedure and then send an email with instructions to customer guido27@example.net",multi_agent
+"Show me data for customers with policies expired in 2025 and export it to an excel file",multi_agent
+"send an email to the customer",ambiguous_request
+"schedule an appointment",ambiguous_request
+"search information about the policy",ambiguous_request
+"show me the data",ambiguous_request
+"help me with the policy",ambiguous_request
+

@@ -1,0 +1,12 @@
+{
+  "graphs": {
+    "bluey": "agents:supervisor",
+    "email_agent": "agents:email_agent",
+    "calendar_agent": "agents:calendar_agent",
+    "doc_agent": "agents:doc_agent",
+    "sql_agent": "agents:sql_agent"
+  },
+  "env": ".env",
+  "python_version": "3.13",
+  "dependencies": ["."]
+}
