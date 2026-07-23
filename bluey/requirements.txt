@@ -3,9 +3,10 @@
 
 # Core LangGraph dependencies
 langgraph>=1.0.6
-langgraph-api>=6.0.38
+langgraph-cli[inmem]>=0.4.2
+langgraph-api>=0.10.1
 langgraph-checkpoint-sqlite>=3.0.2
-langsmith>=6.0.3
+langsmith>=0.9.8
 langchain>=1.0.7
 langchain-core>=1.0.5
 langchain-community>=0.3.0
@@ -27,6 +28,12 @@ sqlalchemy>=2.0.0
 # Data processing and visualization
 pandas>=2.0.0
 openpyxl>=3.1.0
+
+# PDF parsing for the documentation vectorstore
+pypdf>=5.0.0
+
+# Synthetic data generation for data/generate_db.py
+faker>=30.0.0
 
 
 # Pydantic for structured outputs

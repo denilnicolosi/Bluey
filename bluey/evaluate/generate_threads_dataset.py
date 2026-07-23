@@ -330,12 +330,9 @@ def _run_generation_loop(examples: list):
         for i in range(REPETITIONS_PER_EXAMPLE):
             count += 1
             print(f"  [{count}/{total}] Run {i+1}/{REPETITIONS_PER_EXAMPLE}")
-             
             try:
-
                 result = run_single_conversation(msg)
                 stats[result.get("status", "error")] += 1
-                          
                 client.create_example(
                     dataset_name=DESTINATION_DATASET_NAME,
                     inputs=result.get("inputs"),

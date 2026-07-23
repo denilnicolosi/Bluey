@@ -283,19 +283,23 @@ def get_available_time_slots(
     if duration_minutes <= 0:
         return ["❌ Invalid duration"]
 
-    try:
-        day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return ["❌ Invalid date. Use format YYYY-MM-DD"]
-
-    start_dt = day
-    end_dt = start_dt + timedelta(days=1)
+    # Resolve the calendar timezone first: the requested day must span midnight-to-midnight
+    # in the calendar's own timezone, not in UTC, or every returned slot is shifted by the
+    # UTC offset (1h in Rome winter, 2h in summer).
     calendar_tz_name = os.getenv("GOOGLE_CALENDAR_TIMEZONE", "UTC")
     try:
         calendar_tz = ZoneInfo(calendar_tz_name)
     except Exception:  # noqa: BLE001
         calendar_tz = timezone.utc
         calendar_tz_name = "UTC"
+
+    try:
+        day = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=calendar_tz)
+    except ValueError:
+        return ["❌ Invalid date. Use format YYYY-MM-DD"]
+
+    start_dt = day
+    end_dt = start_dt + timedelta(days=1)
 
     body = {
         "timeMin": start_dt.isoformat().replace("+00:00", "Z"),

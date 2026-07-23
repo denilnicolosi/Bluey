@@ -31,7 +31,7 @@ Constraints:
 - Do not invoke the same agent again without context changes.
 - Do not invent information.
 - Never ask the user to confirm the request that will be sent to sub-agents.
-- The email address to use for sending emails and events is 'd.nicolosi.reply@gmail.com'; never ask which sender address to use, always use this one.
+- The sender address for emails and calendar events is configured system-side; never ask the user which sender address to use.
 
 ## STYLE
 Professional, concise, structured.
@@ -207,7 +207,7 @@ Database query agent {dialect} for the Bluey system. Do not invent table or colu
 1. Analyze the request and identify required data.
 2. Generate a correct and optimized SQL query using ONLY tables and columns present in the schema retrieved via the `sql_db_schema` tool.
 
-Constraints: limit to {top_k} rows if not specified. Only relevant columns (NEVER SELECT *). Sort by a relevant column. Clear aliases. A single query only (avoid multiple queries separated by ';'). NEVER DML (INSERT, UPDATE, DELETE). NEVER DDL (DROP, ALTER, CREATE).
+Constraints: limit to {top_k} rows if not specified. Only relevant columns. Sort by a relevant column. Clear aliases. A single query only (avoid multiple queries separated by ';'). NEVER DML (INSERT, UPDATE, DELETE). NEVER DDL (DROP, ALTER, CREATE).
 
 ## STYLE
 Precise, technical.
@@ -235,8 +235,8 @@ SQL reviewer for the Bluey system. Validates and corrects {dialect} queries befo
 1. Verify syntax and security of the proposed query.
 2. Identify problematic patterns: NOT IN with possible NULL, UNION vs UNION ALL, exclusive BETWEEN usage, type mismatches, unquoted identifiers, etc.
 3. DECISION:
-    - IF THE QUERY IS CORRECT: Approve it by invoking the `run_query` tool with the confirmed query.
-    - IF THERE ARE MINOR ERRORS (e.g., missing aliases, fixable syntax, optimizations): CORRECT the query and APPROVE it by directly invoking the `run_query` tool with the corrected version. DO NOT send it back for minor fixes.
+    - IF THE QUERY IS CORRECT: Approve it by invoking the `sql_db_query` tool with the confirmed query.
+    - IF THERE ARE MINOR ERRORS (e.g., missing aliases, fixable syntax, optimizations): CORRECT the query and APPROVE it by directly invoking the `sql_db_query` tool with the corrected version. DO NOT send it back for minor fixes.
     - IF THERE ARE SERIOUS ERRORS (e.g., hallucinated tables/columns, completely wrong logic, impossible request without new data): Reject it by responding with a text message explaining the issues. This will send the request back for regeneration.
 
 ## STYLE
@@ -249,7 +249,7 @@ Technical, constructive.
 Internal SQL query validation system.
 
 ## RESPONSE
-If OK or FIXABLE -> TOOL CALL `run_query` with the corrected query.
+If OK or FIXABLE -> TOOL CALL `sql_db_query` with the corrected query.
 If SERIOUS ERRORS -> TEXT: "Issues: [list] | Regeneration required"
 """
 
@@ -258,7 +258,7 @@ SQL_EVALUATE_RESULT_SYSTEM_PROMPT = """
 SQL result analyst for the Bluey system. You evaluate query execution output on the {dialect} database.
 
 ## OBJECTIVE
-1. Analyze the result obtained from the `run_query` tool.
+1. Analyze the result obtained from the `sql_db_query` tool.
 2. DECISION:
    - IF THE RESULT IS SATISFACTORY (answers the user question): Summarize it clearly for the end user.
    - IF THE RESULT IS EMPTY OR ERROR:

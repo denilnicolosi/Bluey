@@ -1,27 +1,47 @@
 from langchain.chat_models import init_chat_model
 from langchain.agents import create_agent
-from langchain.agents.middleware import HumanInTheLoopMiddleware
 from langchain_core.tools import BaseTool
 from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import RunnableConfig
 from typing import cast
 from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
-from langgraph.errors import GraphInterrupt
+from langgraph.errors import GraphInterrupt, ParentCommand
 from langchain_core.tools import tool as tool_decorator
 from prompts import *
 from tools import *
 import os
-from middleware import dynamic_prompt_middleware
+from middleware import HITLFeedbackMiddleware, dynamic_prompt_middleware
+from tracing import ENVIRONMENT, run_labels
 
 # Import for the SQL subgraph
 from sql_agent import create_sql_subgraph
 
 
-def _init_chat_model(model_name: str | None, **kwargs) -> BaseChatModel:
-    # reasoning_effort va passato dentro model_kwargs, altrimenti LangChain genera un warning
-    kwargs.setdefault("model_kwargs", {})["reasoning_effort"] = kwargs.pop("reasoning_effort", "low")
-    return cast(BaseChatModel, init_chat_model(model_name, **kwargs))
+def _init_chat_model(
+    model_name: str | None,
+    agent: str,
+    reasoning_effort: str | None = "low",
+    **kwargs
+) -> BaseChatModel:
+    """Initialize a chat model, labelled for LangSmith and with provider-aware reasoning effort.
+
+    `reasoning_effort` is a first-class constructor field on ChatOpenAI and
+    ChatGoogleGenerativeAI, but it does not exist on ChatOllama or ChatNVIDIA.
+    Every provider class sets pydantic `extra="ignore"`, so passing it blindly would
+    be dropped silently; probing the built model's fields keeps the behaviour explicit
+    and lets each agent's model stay swappable via environment variables.
+
+    The `agent`/`model`/`env` labels ride on the model itself so every LLM run carries
+    them, including the SQL subgraph's internal nodes, which the supervisor's tool
+    wrapper never touches.
+    """
+    kwargs.update(run_labels(agent, model_name))
+    model = init_chat_model(model_name, **kwargs)
+    supported = getattr(type(model), "model_fields", {})
+    if reasoning_effort and "reasoning_effort" in supported:
+        model = init_chat_model(model_name, reasoning_effort=reasoning_effort, **kwargs)
+    return cast(BaseChatModel, model)
 
 class Agents:
     """
@@ -44,30 +64,34 @@ class Agents:
         self.checkpointer = checkpointer
                 
         # Initialize the SQL agent as a subgraph
-        self.sql_agent = create_sql_subgraph(_init_chat_model(os.getenv('SQL_AGENT_MODEL'), temperature=0))
-        
+        self.sql_agent = create_sql_subgraph(
+            _init_chat_model(os.getenv('SQL_AGENT_MODEL'), agent="sql_agent", temperature=0)
+        )
+
         # Initialize the other agents
         self.email_agent = create_agent(
-            model=_init_chat_model(os.getenv('EMAIL_AGENT_MODEL'), temperature=0),
+            model=_init_chat_model(os.getenv('EMAIL_AGENT_MODEL'), agent="email_agent", temperature=0),
             tools=[send_email],
             system_prompt=EMAIL_AGENT_SYSTEM_PROMPT,
             name="email_agent",
-            middleware=[ 
-                HumanInTheLoopMiddleware( 
-                    interrupt_on={"send_email": True}, 
-                    description_prefix="Email sending in progress", 
-                ), 
+            middleware=[
+                HITLFeedbackMiddleware(
+                    agent="email_agent",
+                    interrupt_on={"send_email": True},
+                    description_prefix="Email sending in progress",
+                ),
             ]
         )
 
         self.appointment_agent = create_agent(
-            model=_init_chat_model(os.getenv('APPOINTMENT_AGENT_MODEL'), temperature=0),
+            model=_init_chat_model(os.getenv('APPOINTMENT_AGENT_MODEL'), agent="appointment_agent", temperature=0),
             tools=[get_available_time_slots, create_calendar_event],
-            middleware=[ 
-                HumanInTheLoopMiddleware( 
-                    interrupt_on={"create_calendar_event": True}, 
-                    description_prefix="Appointment creation in progress", 
-                ), 
+            middleware=[
+                HITLFeedbackMiddleware(
+                    agent="appointment_agent",
+                    interrupt_on={"create_calendar_event": True},
+                    description_prefix="Appointment creation in progress",
+                ),
                 dynamic_prompt_middleware,
             ],
             system_prompt=APPOINTMENT_AGENT_SYSTEM_PROMPT,
@@ -75,11 +99,16 @@ class Agents:
         )
 
         self.documentation_agent = create_agent(
-            model=_init_chat_model(os.getenv('DOCUMENTATION_AGENT_MODEL'), temperature=0, reasoning_effort="minimal"),
+            model=_init_chat_model(
+                os.getenv('DOCUMENTATION_AGENT_MODEL'),
+                agent="documentation_agent",
+                temperature=0,
+                reasoning_effort="minimal",
+            ),
             tools=[search_documentation],
             system_prompt=DOCUMENTATION_AGENT_SYSTEM_PROMPT,
             name="documentation_agent"
-        )               
+        )
 
         # Wrap sub-agents as LangChain tools so the supervisor can call them explicitly
         self.subagent_tools = [
@@ -123,8 +152,13 @@ class Agents:
         
     
         # Create the supervisor
-        self.supervisor = create_agent(          
-            model=_init_chat_model(os.getenv('SUPERVISOR_AGENT_MODEL'), temperature=0, reasoning_effort="medium"),
+        self.supervisor = create_agent(
+            model=_init_chat_model(
+                os.getenv('SUPERVISOR_AGENT_MODEL'),
+                agent="supervisor",
+                temperature=0,
+                reasoning_effort="medium",
+            ),
             tools=[
                 *self.subagent_tools,
                 export_to_excel                
@@ -162,9 +196,18 @@ class Agents:
             The sub-agent has no access to conversation history.
             """
             try:
+                traced_config: RunnableConfig = {
+                    **(config or {}),
+                    "run_name": name,
+                    "metadata": {
+                        **((config or {}).get("metadata") or {}),
+                        "delegated_to": name,
+                        "env": ENVIRONMENT,
+                    },
+                }
                 response = agent.invoke(
                     {"messages": [HumanMessage(content=request)]},
-                    config=config
+                    config=traced_config
                 )
                 if response and "messages" in response and len(response["messages"]) > 0:
                     last_msg = response["messages"][-1]
@@ -174,8 +217,11 @@ class Agents:
                         return last_msg.text
                     return str(last_msg)
                 return "Error: Sub-agent returned an empty response."
-            except GraphInterrupt:
-                raise  # Let HITL interrupts propagate to the supervisor
+            except (GraphInterrupt, ParentCommand):
+                # LangGraph control-flow signals, not errors: GraphInterrupt carries the
+                # HITL pause and ParentCommand carries a Command(graph=PARENT) hand-off.
+                # Both must reach the supervisor's runtime instead of being stringified below.
+                raise
             except Exception as e:
                 return f"Error invoking sub-agent: {str(e)}"
 

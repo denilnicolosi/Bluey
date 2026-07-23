@@ -21,6 +21,7 @@ from langchain.agents.middleware.human_in_the_loop import (
     ReviewConfig,
 )
 from pydantic import BaseModel, Field
+from tracing import log_hitl_decision
 from prompts import (
     SQL_GENERATE_QUERY_SYSTEM_PROMPT, 
     SQL_CHECK_QUERY_SYSTEM_PROMPT,
@@ -188,11 +189,17 @@ def create_sql_subgraph(model: BaseChatModel) -> CompiledStateGraph:
             "review_configs": [review_config],
         }
 
-        response = interrupt(hitl_request)        
+        response = interrupt(hitl_request)
         decisions = response.get("decisions") or []
         if decisions:
             decision = decisions[0]
             decision_type = decision.get("type")
+            log_hitl_decision(
+                agent="sql_agent",
+                tool_name=run_query_tool.name,
+                decision_type=decision_type or "unknown",
+                comment=str(tool_input.get("query", ""))[:500],
+            )
             if decision_type == "approve":
                 return run_query_tool.invoke(tool_input, config)
             if decision_type == "edit":
