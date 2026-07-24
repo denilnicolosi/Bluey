@@ -41,6 +41,7 @@ Bluey follows a **supervisor–worker** pattern using `create_agent` from `langc
 - **Human-in-the-loop** is enforced via `HumanInTheLoopMiddleware` on worker agents and `interrupt()` on the SQL subgraph.
 - A custom `dynamic_prompt_middleware` (built with the `@dynamic_prompt` decorator from `langchain.agents.middleware`) injects runtime values (current date/time, timezone) into agent prompts.
 - All prompts follow the **CO-STAR** structure (Context, Objective, Style, Tone, Audience, Response).
+- **Prompts can optionally be centralized on LangSmith Prompt Hub** (toggled via the `LANGSMITH_PROMPTS` environment variable): when enabled, each agent's system prompt is pulled from LangSmith at startup instead of the in-code literals in `prompts.py`, so prompts can be versioned and iterated without code changes; when disabled (the default), the local prompts are used and a LangSmith outage transparently falls back to them.
 
 ---
 
@@ -171,6 +172,8 @@ Edit `.env` and fill in:
 | `LANGSMITH_API_KEY` | LangSmith key for tracing (optional) |
 | `LANGSMITH_ENDPOINT` | LangSmith endpoint URL |
 | `LANGSMITH_PROJECT` | LangSmith project name |
+| `LANGSMITH_PROMPTS` | Pull agent prompts from LangSmith Prompt Hub instead of `prompts.py` (`true`/`false`, default `false`) |
+| `LANGSMITH_PROMPT_TAG` | Optional commit tag/hash to pin hosted prompts (empty = latest commit) |
 | `DATABASE_PATH` | Path to the SQLite database |
 | `DOCS_PATH` | Path to the documentation directory |
 | `GOOGLE_CREDENTIALS_DIR` | Path to Google OAuth credentials directory |
@@ -270,7 +273,7 @@ The pipeline runs each request of a 30-example dataset (covering all agents, mul
 
 Two model configurations were benchmarked (results from the thesis evaluation):
 
-| Metric | Economical models* | High-end models** |
+| Metric | Low-cost models* | High-end models** |
 |---|---|---|
 | Request fulfilled | 4.61 | 4.74 |
 | Groundedness | 4.81 | 4.86 |
@@ -283,10 +286,10 @@ Mean scores on a 1–5 scale. \*GPT-5 nano/mini + Qwen3-coder via Ollama (SQL ag
 
 | Configuration | Avg. TTFT latency per turn | Avg. cost per turn |
 |---|---|---|
-| Economical models | 30 s | $0.005 |
+| Low-cost models | 30 s | $0.005 |
 | High-end models | 80 s (+167%) | $0.090 (+1700%) |
 
-**Key finding:** a well-designed multi-agent architecture compensates for the limitations of weaker models through task specialization. The high-end configuration improves the average score by only **+0.12 points**, which does not justify ~18× higher costs and ~3× higher latency and the ability to run on lightweight models also enables deploying privacy-sensitive agents on local or self-hosted LLMs.
+**Key finding:** a well-designed multi-agent architecture compensates for the limitations of weaker models through task specialization. The high-end configuration improves the average score by only **+0.12 points**, which does not justify ~18× higher costs and ~3× higher latency. Moreover, the ability to run on lightweight models enables deploying privacy-sensitive agents on local or self-hosted LLMs.
 
 ---
 
