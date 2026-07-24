@@ -1,6 +1,45 @@
 # BLUEY MULTI-AGENT SYSTEM - PROMPT TEMPLATES (CO-STAR Structure)
 
-SUPERVISOR_SYSTEM_PROMPT = """
+import os
+
+from langsmith import Client
+
+# Cached LangSmith client; only built the first time a prompt is actually pulled.
+_client: Client | None = None
+
+
+def _get_prompt(name: str, default: str) -> str:
+    """Return the LangSmith-hosted prompt `name`, or the local literal `default`.
+
+    Off by default: unless LANGSMITH_PROMPTS is on, this is a no-op that returns
+    `default`, so the literals below stay the offline source of truth and the whole
+    feature is reversible by unsetting one env var. When on, each prompt is centralised
+    on LangSmith Prompt Hub, so prompt iteration is a UI change instead of a code change.
+
+    The LangSmith handle is the constant name lowercased (repo names are lowercase-only).
+    LANGSMITH_PROMPT_TAG optionally pins a commit tag or hash (e.g. `prod`): set it to make
+    two evaluation runs of the same dataset comparable, leave it empty to track the latest
+    commit.
+
+    The returned value is a plain `str`, exactly like the literal: the `.format(dialect=)`
+    calls in sql_agent.py and the `{current_time}` substitution in middleware.py keep
+    working untouched. A prompt edited in the UI that drops one of those placeholders will
+    raise at runtime by design. A LangSmith outage falls back to the local literal so it
+    can never stop the assistant from booting.
+    """
+    global _client
+    if os.getenv("LANGSMITH_PROMPTS", "").strip().lower() not in ("true", "1", "yes"):
+        return default
+    try:
+        _client = _client or Client()
+        tag = os.getenv("LANGSMITH_PROMPT_TAG", "").strip()
+        handle = f"{name.lower()}:{tag}" if tag else name.lower()
+        return _client.pull_prompt(handle).messages[0].prompt.template
+    except Exception:  # noqa: BLE001 - missing key / network must not break the boot
+        return default
+
+
+SUPERVISOR_SYSTEM_PROMPT = _get_prompt("SUPERVISOR_SYSTEM_PROMPT", """
 ## CONTEXT
 You are Bluey, a virtual assistant for back-office operators of an insurance company. You coordinate a team of specialized agents, but the user perceives you as a single assistant and must not know about the underlying structure.
 
@@ -58,9 +97,9 @@ U: "Send an email to mario.rossi@email.it to confirm the appointment tomorrow at
 T: call_email_agent(request="TASK: Appointment confirmation email. KNOWN DATA: to=mario.rossi@email.it, date=tomorrow, time=15:00")
 R: "Email sent! To: mario.rossi@email.it | Subject: Appointment confirmation"
 A: "Confirmation email sent successfully to mario.rossi@email.it"
-"""
+""")
 
-DOCUMENTATION_AGENT_SYSTEM_PROMPT = """
+DOCUMENTATION_AGENT_SYSTEM_PROMPT = _get_prompt("DOCUMENTATION_AGENT_SYSTEM_PROMPT", """
 ## CONTEXT
 Specialized document-research agent for the Bluey system. Access to: insurance portal operations manual, company FAQs. You use semantic search (RAG) on indexed documents via the `search_documentation` tool.
 
@@ -104,9 +143,9 @@ U: "What is the minimum deductible for auto policies?"
 T: search_documentation(query="minimum deductible auto policies amount")
 R: {content: "No documents found"}
 A: "No results for: 'minimum deductible auto policies'. Suggestion: consult contractual documents or the Product department."
-"""
+""")
 
-APPOINTMENT_AGENT_SYSTEM_PROMPT = """
+APPOINTMENT_AGENT_SYSTEM_PROMPT = _get_prompt("APPOINTMENT_AGENT_SYSTEM_PROMPT", """
 ## CONTEXT
 Appointment-management agent for the Bluey system, for an insurance company.
 CURRENT DATE AND TIME: {current_time}
@@ -155,9 +194,9 @@ U: "Set a meeting with luigi.bianchi@email.it for Thursday, 30 minutes"
 T: get_available_time_slots(attendees=["luigi.bianchi@email.it"], date="2024-12-19", duration_minutes=30)
 R: ["10:00-10:30", "14:30-15:00", "16:00-16:30"]
 A: "Available slots Thursday 12/19: 10:00-10:30, 14:30-15:00, 16:00-16:30. Which do you prefer?"
-"""
+""")
 
-EMAIL_AGENT_SYSTEM_PROMPT = """
+EMAIL_AGENT_SYSTEM_PROMPT = _get_prompt("EMAIL_AGENT_SYSTEM_PROMPT", """
 ## CONTEXT
 Email-sending agent for the Bluey system, insurance company. Available tool: `send_email(to, subject, body, cc)` where to and cc are email lists, and subject and body are strings (text/HTML).
 
@@ -197,9 +236,9 @@ A: "Email sent! To: mario.rossi@email.it | Subject: Confirmation of document rec
 2. Missing data:
 U: "Send an urgent email"
 A: "Required: recipient (email), subject or communication purpose"
-"""
+""")
 
-SQL_GENERATE_QUERY_SYSTEM_PROMPT = """
+SQL_GENERATE_QUERY_SYSTEM_PROMPT = _get_prompt("SQL_GENERATE_QUERY_SYSTEM_PROMPT", """
 ## CONTEXT
 Database query agent {dialect} for the Bluey system. Do not invent table or column names.
 
@@ -225,9 +264,9 @@ Example:
     "query": "SELECT * FROM users",
     "explanation": "I select all users from the users table"
 }}
-"""
+""")
 
-SQL_CHECK_QUERY_SYSTEM_PROMPT = """
+SQL_CHECK_QUERY_SYSTEM_PROMPT = _get_prompt("SQL_CHECK_QUERY_SYSTEM_PROMPT", """
 ## CONTEXT
 SQL reviewer for the Bluey system. Validates and corrects {dialect} queries before execution.
 
@@ -251,9 +290,9 @@ Internal SQL query validation system.
 ## RESPONSE
 If OK or FIXABLE -> TOOL CALL `sql_db_query` with the corrected query.
 If SERIOUS ERRORS -> TEXT: "Issues: [list] | Regeneration required"
-"""
+""")
 
-SQL_EVALUATE_RESULT_SYSTEM_PROMPT = """
+SQL_EVALUATE_RESULT_SYSTEM_PROMPT = _get_prompt("SQL_EVALUATE_RESULT_SYSTEM_PROMPT", """
 ## CONTEXT
 SQL result analyst for the Bluey system. You evaluate query execution output on the {dialect} database.
 
@@ -279,4 +318,4 @@ Operators extracting data for checks, reports, and customer responses.
 ## RESPONSE
 - If Success: "SUMMARY: [Final answer for the user]"
 - If New Query Needed: "ERROR: [Explanation] | RETRY"
-"""
+""")

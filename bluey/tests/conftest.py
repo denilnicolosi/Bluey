@@ -63,3 +63,6 @@ def _set_test_env_vars(monkeypatch):
     monkeypatch.setenv("GOOGLE_CALENDAR_ID", "primary")
     monkeypatch.setenv("GOOGLE_CALENDAR_TIMEZONE", "UTC")
     monkeypatch.setenv("DOCS_PATH", "./docs")
+    # Keep prompt resolution offline: tests reload prompts via importlib and must
+    # never reach out to LangSmith to pull hosted prompts.
+    monkeypatch.setenv("LANGSMITH_PROMPTS", "false")
